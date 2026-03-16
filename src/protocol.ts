@@ -5,10 +5,11 @@
  * through Arbitrum (hub) to Tron via LayerZero Legacy Mesh.
  */
 
-import {http, createPublicClient, createWalletClient, type Chain, type PublicClient, type WalletClient, type Address} from 'viem';
+import {http, createPublicClient, createWalletClient, getAddress, type Chain, type PublicClient, type WalletClient, type Address} from 'viem';
 import {arbitrum, berachain} from 'viem/chains';
 import {privateKeyToAccount} from 'viem/accounts';
 import {Options} from '@layerzerolabs/lz-v2-utilities';
+import {createHash} from 'crypto';
 import bs58 from 'bs58';
 
 // ============================================================================
@@ -143,6 +144,66 @@ export const ERC20_ABI = [
 // TRON ADDRESS ENCODING
 // ============================================================================
 
+export class InvalidAddressError extends Error {
+  constructor(address: string) {
+    super(`Invalid Tron address: ${address}`);
+    this.name = 'InvalidAddressError';
+  }
+}
+
+function sha256(data: Uint8Array): Buffer {
+  return createHash('sha256').update(data).digest();
+}
+
+function isValidTronBase58(address: string): boolean {
+  if (!address.startsWith('T')) return false;
+  try {
+    const decoded = bs58.decode(address);
+    if (decoded.length !== 25) return false;
+    if (decoded[0] !== 0x41) return false;
+    // Verify checksum: double SHA256 of first 21 bytes, first 4 bytes = checksum
+    const payload = decoded.slice(0, 21);
+    const checksum = sha256(sha256(payload)).subarray(0, 4);
+    return Buffer.from(decoded.slice(21)).equals(checksum);
+  } catch {
+    return false;
+  }
+}
+
+function isValidEvmHex(address: string): boolean {
+  return /^0x[0-9a-fA-F]{40}$/.test(address);
+}
+
+/**
+ * Convert a Tron address to its 20-byte EVM hex representation.
+ *
+ * Accepts Base58check (T...) or 0x-prefixed EVM hex.
+ * For Base58check: decodes, validates checksum, strips 0x41 prefix.
+ * For EVM hex: validates length and returns checksummed.
+ *
+ * @throws {InvalidAddressError} if the address is invalid
+ */
+export function toHexAddress(address: string): `0x${string}` {
+  if (address.startsWith('T')) {
+    if (!isValidTronBase58(address)) {
+      throw new InvalidAddressError(address);
+    }
+    const decoded = bs58.decode(address);
+    const hex = Buffer.from(decoded.slice(1, 21)).toString('hex');
+    return `0x${hex}` as `0x${string}`;
+  }
+
+  if (address.startsWith('0x')) {
+    if (!isValidEvmHex(address)) {
+      throw new InvalidAddressError(address);
+    }
+    // Return EIP-55 checksummed address
+    return getAddress(address as Address);
+  }
+
+  throw new InvalidAddressError(address);
+}
+
 /**
  * Convert a Tron address to bytes32 for LayerZero.
  *
@@ -151,31 +212,10 @@ export const ERC20_ABI = [
  *   require(to == bytes32(uint256(uint160(address(uint160(uint256(to)))))))
  *
  * If 0x41 is included, the round-trip check fails and the token credit is silently dropped.
- *
- * @param tronAddress - Base58check (T...) or hex (0x41...) Tron address
- * @returns bytes32 hex string with 20-byte address left-padded to 32 bytes
  */
 export function tronAddressToBytes32(tronAddress: string): `0x${string}` {
-  let evmHex: string;
-
-  if (tronAddress.startsWith('T')) {
-    // Base58check: decode → 25 bytes [0x41, ...20 addr bytes, ...4 checksum]
-    const decoded = bs58.decode(tronAddress);
-    evmHex = Buffer.from(decoded.slice(1, 21)).toString('hex');
-  } else if (tronAddress.startsWith('0x41') || tronAddress.startsWith('41')) {
-    // Hex with 0x41 prefix: strip it
-    const raw = tronAddress.startsWith('0x') ? tronAddress.slice(2) : tronAddress;
-    evmHex = raw.slice(2); // remove the '41' prefix
-  } else {
-    // Already a 20-byte hex address
-    evmHex = tronAddress.startsWith('0x') ? tronAddress.slice(2) : tronAddress;
-  }
-
-  if (evmHex.length !== 40) {
-    throw new Error(`Invalid Tron address: expected 20-byte hex, got ${evmHex.length / 2} bytes`);
-  }
-
-  return `0x${evmHex.padStart(64, '0')}` as `0x${string}`;
+  const hex = toHexAddress(tronAddress);
+  return `0x${hex.slice(2).padStart(64, '0')}` as `0x${string}`;
 }
 
 /**

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@layerzerolabs/lz-v2-utilities": "3.0.67",
@@ -13,6 +14,7 @@
     "viem": "^2.21.0"
   },
   "devDependencies": {
-    "tsx": "^4.20.4"
+    "tsx": "^4.20.4",
+    "vitest": "^3.0.0"
   }
 }
