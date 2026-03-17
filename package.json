@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@layerzerolabs/lz-v2-utilities": "3.0.67",
-    "bs58": "^6.0.0",
     "dotenv": "^16.4.7",
+    "tronweb": "^6.2.2",
     "viem": "^2.21.0"
   },
   "devDependencies": {

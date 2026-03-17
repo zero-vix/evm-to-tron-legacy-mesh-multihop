@@ -12,8 +12,6 @@
  */
 
 import {parseUnits, formatUnits, formatEther, encodeAbiParameters, type Address} from 'viem';
-import {createPublicClient, http} from 'viem';
-import {arbitrum} from 'viem/chains';
 import {
   CHAINS,
   ChainKey,
@@ -83,10 +81,7 @@ async function quoteHopChainFee(hopSendParams: {
   composeMsg: `0x${string}`;
   oftCmd: `0x${string}`;
 }): Promise<bigint> {
-  const client = createPublicClient({
-    chain: arbitrum,
-    transport: http(CHAINS.arbitrum.chain.rpcUrls.default.http[0]),
-  });
+  const client = getPublicClient('arbitrum');
 
   const {nativeFee} = await client.readContract({
     address: ARBITRUM_HUB.oftNative,
